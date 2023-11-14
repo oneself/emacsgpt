@@ -3,7 +3,7 @@
 This is an emacs mode that can be used to interact with ChatGPT from inside
 emacs. To use, follow these steps:
 
-1. Set the OpenAI API key. In `.zshrc` or `.bashrc` (this can also be done in emacs):
+1. Set the [OpenAI API key](https://platform.openai.com/api-keys). In `.zshrc` or `.bashrc` (this can also be done in emacs):
 
     export OPENAI_API_KEY=<API_KEY>
 

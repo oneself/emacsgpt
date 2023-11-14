@@ -2,9 +2,6 @@
 (require 'request)
 (require 'subr-x)
 
-(setq debug-on-error t)
-(setq url-debug t)
-
 (defvar emacsgpt-api-key nil
   "API key for OpenAI. Set this variable or the environment variable OPENAI_API_KEY.")
 
