@@ -1,7 +1,11 @@
+<img src="https://raw.githubusercontent.com/oneself/emacsgpt/main/images/emacsgpt.png" width="200" align="right" title="macsGPT Logo" />
+
 # EmacsGPT
 
 This is an emacs mode that can be used to interact with ChatGPT from inside
-emacs. To use, follow these steps:
+emacs. 
+
+To use it, follow these steps:
 
 1. Set the [OpenAI API key](https://platform.openai.com/api-keys). In `.zshrc` or `.bashrc` (this can also be done in emacs):
 ```
