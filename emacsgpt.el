@@ -1,15 +1,32 @@
 
 (require 'request)
 (require 'subr-x)
+(require 'spinner)
+
+;(require 'f)
+;(setq debug-on-error t)
+
+  ;;;;;;;;;;;;;;;
+ ;; VARIABLES ;;
+;;;;;;;;;;;;;;;
 
 (defvar emacsgpt-api-key nil
   "API key for OpenAI. Set this variable or the environment variable OPENAI_API_KEY.")
 
-(defvar emacsgpt-api-model "gpt-3.5-turbo"
+(defvar emacsgpt-api-model "gpt-4"
   "Model name for OpenAI API.")
 
-(defvar emacsgpt-api-endpoint (concat "https://api.openai.com/v1/chat/completions")
+(defvar emacsgpt-api-chat-endpoint (concat "https://api.openai.com/v1/chat/completions")
   "Endpoint for OpenAI API.")
+
+(defvar-local emacsgpt--spinner nil)
+
+(defconst emacsgpt--lighter
+  '(" emacsgpt" (:eval (spinner-print emacsgpt--spinner))))
+
+  ;;;;;;;;;;;;;;;
+ ;; UTILITIES ;;
+;;;;;;;;;;;;;;;
 
 (defun emacsgpt-api-key-get ()
   "Get the Emacsgpt API key."
@@ -23,68 +40,75 @@
     (insert content)         ; Insert the content
     (insert "\n")))          ; Add a newline for readability
 
-(defun emacsgpt-query (input)
-  "Send INPUT to the OpenAI API and return the response."
-  ;; Construct headers
-  (let ((headers `(("Content-Type" . "application/json")
-                   ("Authorization" . ,(concat "Bearer " (emacsgpt-api-key-get)))))
-        (request-data (json-encode `(("model" . ,emacsgpt-api-model)
-                                     ("messages" . ((("role" . "user") ("content" . ,input))))))))
-    (request emacsgpt-api-endpoint
-      :method "POST"
-      :headers headers
-      :data request-data
-      :parser 'json-read
-      :success (cl-function
-                (lambda (&key data &allow-other-keys)
-                  (emacsgpt-handle-response data input)))  ; Include 'input' in the lambda closure
-      :error (cl-function
-              (lambda (&rest args &key error-thrown &allow-other-keys)
-                (message "Got error: %S" error-thrown))))))
+(defun emacsgpt--start-spinner ()
+  "Create and start a spinner in the *chatgpt* buffer."
+  ;(with-current-buffer (get-buffer-create "*chatgpt*")
+    (unless emacsgpt--spinner
+      (setq emacsgpt--spinner (spinner-create 'moon 10)))
+    (spinner-start emacsgpt--spinner)
+    (message "spinner started"))
+;)
+
+(defun emacsgpt--stop-spinner ()
+  "Stop the spinner in the *chatgpt* buffer."
+  ;(with-current-buffer (get-buffer-create "*chatgpt*")
+    (when emacsgpt--spinner
+      (spinner-stop emacsgpt--spinner)
+      (setq emacsgpt--spinner nil)
+      (message "spinner stopped")))
+;)
+
+;(emacsgpt--start-spinner)
+;(emacsgpt--stop-spinner)
+
+
+  ;;;;;;;;;;;;;;;
+ ;; ASSISTANT ;;
+;;;;;;;;;;;;;;;
+
+
+
+
+  ;;;;;;;;;;
+ ;; CHAT ;;
+;;;;;;;;;;
 
 (defun emacsgpt-query (input)
   "Send INPUT to the OpenAI API and return the response."
+  ;; Start the spinner
+  (emacsgpt--start-spinner)
   ;; Construct headers
   (with-current-buffer (switch-to-buffer-other-window (get-buffer-create "*emacsgpt*"))
     (let ((inhibit-read-only t))
       (goto-char (point-max))
-      (insert (format "\n\n------------------------------------- INPUT ------------------------------------\n\n%s\n" input))  ; Insert input
-      (inferior-emacsgpt-mode)))
+      ;; Split input into lines; insert first 5 and count the rest.
+      (let* ((input-lines (split-string input "\n"))
+             (first-lines (cl-subseq input-lines 0 (min 5 (length input-lines))))
+             (remaining-lines (- (length input-lines) 5)))
+        (insert (format "\n\n------------------------------------- INPUT ------------------------------------\n\n%s\n"
+                        (string-join first-lines "\n")))
+        (when (> remaining-lines 0)
+          (insert (format "\n[%d more lines]\n" remaining-lines)))))  ; Insert number of remaining lines
+    (inferior-emacsgpt-mode))
   (let ((headers `(("Content-Type" . "application/json")
                    ("Authorization" . ,(concat "Bearer " (emacsgpt-api-key-get)))))
         (request-data (json-encode `(("model" . ,emacsgpt-api-model)
                                      ("messages" . ((("role" . "user") ("content" . ,input))))))))
-    (emacsgpt-log (format "Request url: %s, headers: %s, data: %s" emacsgpt-api-endpoint headers request-data))
-    (request emacsgpt-api-endpoint
+    (emacsgpt-log (format "Request url: %s, headers: %s, data: %s" emacsgpt-api-chat-endpoint headers request-data))
+    (request emacsgpt-api-chat-endpoint
       :method "POST"
       :headers headers
       :data request-data
       :parser 'json-read
       :success (cl-function
                 (lambda (&key data &allow-other-keys)
+                  (emacsgpt--stop-spinner)
                   (emacsgpt-handle-response data)))
       :error (cl-function
               (lambda (&rest args &key error-thrown &allow-other-keys)
+                (emacsgpt--stop-spinner)
+                (setq emacsgpt-spinner nil)
                 (message "Got error: %S" error-thrown))))))
-
-(defun extract-content-from-response (response)
-  "Extract the 'content' value from the given RESPONSE structure."
-  (let* ((choices (cdr (assoc 'choices response)))  ; Extract the 'choices' list
-         (first-choice (aref choices 0))            ; Get the first element of the vector
-         (message (cdr (assoc 'message first-choice))) ; Extract the 'message' alist
-         (content (cdr (assoc 'content message))))  ; Extract the 'content' value
-    content))
-
-(defun emacsgpt-handle-response (data)
-  "Handle the response from the Emacsgpt API, given DATA and INPUT."
-  (let* ((output (extract-content-from-response data)))
-    (with-current-buffer (get-buffer-create "*emacsgpt*")
-      (let ((inhibit-read-only t))
-        (goto-char (point-max))
-        (insert (format "\n\n------------------------------------- OUTPUT -----------------------------------\n\n%s\n" output))
-        (goto-char (point-max))
-        (inferior-emacsgpt-mode)))))
-
 
 (defun emacsgpt-eval-region (start end)
   "Evaluate the region from START to END using the OpenAI API."
@@ -104,6 +128,12 @@
            (end (progn (forward-paragraph) (point))))    ; Find end of the paragraph
       (emacsgpt-eval-region start end))))
 
+(defun emacsgpt-eval-buffer ()
+  "Evaluate the current buffer using the OpenAI API by calling `emacsgpt-eval-region`."
+  (interactive)
+  ;; Use `point-min` and `point-max` to get the start and end of the buffer
+  (emacsgpt-eval-region (point-min) (point-max)))
+
 (defun emacsgpt-eval-message ()
   "Send a message to OpenAI API."
   (interactive)
@@ -112,23 +142,33 @@
         (message "Input is empty.")
       (emacsgpt-query user-input))))
 
+  ;;;;;;;;;;
+ ;; MODE ;;
+;;;;;;;;;;
+
 (define-minor-mode emacsgpt-mode
   "A minor mode to interact with OpenAI's Emacsgpt."
-  :lighter " Emacsgpt"
+  :lighter emacsgpt--lighter
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map (kbd "C-c c r") 'emacsgpt-eval-region)
+            (define-key map (kbd "C-c c b") 'emacsgpt-eval-buffer)
             (define-key map (kbd "C-c c p") 'emacsgpt-eval-paragraph)
             (define-key map (kbd "C-c c m") 'emacsgpt-eval-message)
             map))
 
-(define-derived-mode inferior-emacsgpt-mode fundamental-mode "Inferior Emacsgpt"
+(define-derived-mode inferior-emacsgpt-mode markdown-mode "Inferior Emacsgpt"
   "Major mode for Emacsgpt interaction."
-  (setq-local font-lock-defaults '(inferior-emacsgpt-font-lock-keywords))
-  (setq-local read-only t))
+  ;; Combine markdown-mode's font-lock keywords with custom ones
+  (setq-local font-lock-defaults `(,(append markdown-mode-font-lock-keywords
+                                            '((".*INPUT.*" . font-lock-function-name-face)
+                                              (".*OUTPUT.*" . font-lock-variable-name-face)))))
+  ;; Make the buffer read-only
+  (setq-local buffer-read-only t))
 
-(defvar inferior-emacsgpt-font-lock-keywords
-  '((".*INPUT.*" . font-lock-function-name-face)
-    (".*OUTPUT.*" . font-lock-variable-name-face)))
+;; Set the lighter for the mode line
+(add-to-list 'minor-mode-alist '(inferior-emacsgpt-mode emacsgpt--lighter))
+
+
 
 (defun emacsgpt--turn-on ()
   "Turn on `emacsgpt-mode` in the current buffer if appropriate."
