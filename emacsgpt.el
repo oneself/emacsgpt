@@ -4,7 +4,7 @@
 (require 'spinner)
 
 ;(require 'f)
-;(setq debug-on-error t)
+(setq debug-on-error t)
 
   ;;;;;;;;;;;;;;;
  ;; VARIABLES ;;
@@ -62,38 +62,39 @@
 ;(emacsgpt--stop-spinner)
 
 
-  ;;;;;;;;;;;;;;;
- ;; ASSISTANT ;;
-;;;;;;;;;;;;;;;
-
-
-
-
   ;;;;;;;;;;
  ;; CHAT ;;
 ;;;;;;;;;;
 
-(defun emacsgpt-query (input)
-  "Send INPUT to the OpenAI API and return the response."
-  ;; Start the spinner
-  (emacsgpt--start-spinner)
-  ;; Construct headers
+(defun emacsgpt-print-input (input user-input)
+  "Print the INPUT and USER-INPUT to emacsgpt buffer."
   (with-current-buffer (switch-to-buffer-other-window (get-buffer-create "*emacsgpt*"))
     (let ((inhibit-read-only t))
       (goto-char (point-max))
-      ;; Split input into lines; insert first 5 and count the rest.
-      (let* ((input-lines (split-string input "\n"))
-             (first-lines (cl-subseq input-lines 0 (min 5 (length input-lines))))
-             (remaining-lines (- (length input-lines) 5)))
-        (insert (format "\n\n------------------------------------- INPUT ------------------------------------\n\n%s\n"
-                        (string-join first-lines "\n")))
-        (when (> remaining-lines 0)
-          (insert (format "\n[%d more lines]\n" remaining-lines)))))  ; Insert number of remaining lines
-    (inferior-emacsgpt-mode))
-  (let ((headers `(("Content-Type" . "application/json")
-                   ("Authorization" . ,(concat "Bearer " (emacsgpt-api-key-get)))))
-        (request-data (json-encode `(("model" . ,emacsgpt-api-model)
-                                     ("messages" . ((("role" . "user") ("content" . ,input))))))))
+      (when (not (string-empty-p input))  ; check if input is not empty
+        (let* ((input-lines (split-string input "\n"))
+               (first-lines (cl-subseq input-lines 0 (min 5 (length input-lines))))
+               (remaining-lines (- (length input-lines) 5)))
+          (insert (format "\n\n------------------------------------- INPUT ------------------------------------\n\n%s\n"
+                          (string-join first-lines "\n")))
+          (when (> remaining-lines 0)
+            (insert (format "\n[%d more lines]\n" remaining-lines)))))
+      (insert (format "\n---------------------------------- USER INPUT ---------------------------------\n\n%s\n"
+                      user-input)))
+    (inferior-emacsgpt-mode)))
+
+(defun emacsgpt-query (input user-input)
+  "Send INPUT and USER-INPUT to the OpenAI API and return the response."
+  ;; Start the spinner
+  (emacsgpt--start-spinner)
+  ;; Print the input
+  (emacsgpt-print-input input user-input)
+  ;; Construct headers and request data
+  (let* ((combined-input (concat input "\n\n" user-input))
+         (headers `(("Content-Type" . "application/json")
+                    ("Authorization" . ,(concat "Bearer " (emacsgpt-api-key-get)))))
+         (request-data (json-encode `(("model" . ,emacsgpt-api-model)
+                                      ("messages" . ((("role" . "user") ("content" . ,combined-input))))))))
     (emacsgpt-log (format "Request url: %s, headers: %s, data: %s" emacsgpt-api-chat-endpoint headers request-data))
     (request emacsgpt-api-chat-endpoint
       :method "POST"
@@ -107,18 +108,38 @@
       :error (cl-function
               (lambda (&rest args &key error-thrown &allow-other-keys)
                 (emacsgpt--stop-spinner)
-                (setq emacsgpt-spinner nil)
+                (emacsgpt-log error-thrown)
                 (message "Got error: %S" error-thrown))))))
+
+
+(defun extract-content-from-response (response)
+  "Extract the 'content' value from the given RESPONSE structure."
+  (let* ((choices (cdr (assoc 'choices response)))  ; Extract the 'choices' list
+         (first-choice (aref choices 0))            ; Get the first element of the vector
+         (message (cdr (assoc 'message first-choice))) ; Extract the 'message' alist
+         (content (cdr (assoc 'content message))))  ; Extract the 'content' value
+    content))
+
+(defun emacsgpt-handle-response (data)
+  "Handle the response from the Emacsgpt API, given DATA and INPUT."
+  (let* ((output (extract-content-from-response data)))
+    (with-current-buffer (get-buffer-create "*emacsgpt*")
+      (let ((inhibit-read-only t))
+        (goto-char (point-max))
+        (insert (format "\n\n------------------------------------- OUTPUT -----------------------------------\n\n%s\n" output))
+        (goto-char (point-max))
+        (inferior-emacsgpt-mode)))))
+
 
 (defun emacsgpt-eval-region (start end)
   "Evaluate the region from START to END using the OpenAI API."
   (interactive "r")
   (let* ((region-input (string-trim (buffer-substring-no-properties start end)))
          (user-input (read-string "Message: "))
-         (combined-input (concat region-input "\n\n" user-input)))
+    (combined-input (concat region-input "\n\n" user-input)))
     (if (string= "" (string-trim combined-input))
         (message "Input is empty.")
-      (emacsgpt-query combined-input))))
+      (emacsgpt-query region-input user-input))))
 
 (defun emacsgpt-eval-paragraph ()
   "Evaluate the current paragraph using the OpenAI API."
@@ -140,7 +161,7 @@
   (let* ((user-input (read-string "Message: ")))
     (if (string= "" (string-trim user-input))
         (message "Input is empty.")
-      (emacsgpt-query user-input))))
+      (emacsgpt-query "" user-input))))
 
   ;;;;;;;;;;
  ;; MODE ;;
