@@ -3,8 +3,7 @@
 (require 'subr-x)
 (require 'spinner)
 
-;(require 'f)
-(setq debug-on-error t)
+;(setq debug-on-error t)
 
   ;;;;;;;;;;;;;;;
  ;; VARIABLES ;;
@@ -16,8 +15,11 @@
 (defvar emacsgpt-api-model "gpt-4"
   "Model name for OpenAI API.")
 
-(defvar emacsgpt-api-chat-endpoint (concat "https://api.openai.com/v1/chat/completions")
+(defvar emacsgpt-api-chat-endpoint "https://api.openai.com/v1/chat/completions"
   "Endpoint for OpenAI API.")
+
+(defvar emacsgpt-print-line-num 5
+  "Number of lines to print in the *emacsgpt* buffer.")
 
 (defvar-local emacsgpt--spinner nil)
 
@@ -73,8 +75,8 @@
       (goto-char (point-max))
       (when (not (string-empty-p input))  ; check if input is not empty
         (let* ((input-lines (split-string input "\n"))
-               (first-lines (cl-subseq input-lines 0 (min 5 (length input-lines))))
-               (remaining-lines (- (length input-lines) 5)))
+               (first-lines (cl-subseq input-lines 0 (min emacsgpt-print-line-num (length input-lines))))
+               (remaining-lines (- (length input-lines) emacsgpt-print-line-num)))
           (insert (format "\n\n------------------------------------- INPUT ------------------------------------\n\n%s\n"
                           (string-join first-lines "\n")))
           (when (> remaining-lines 0)
@@ -83,34 +85,38 @@
                       user-input)))
     (inferior-emacsgpt-mode)))
 
+
 (defun emacsgpt-query (input user-input)
   "Send INPUT and USER-INPUT to the OpenAI API and return the response."
-  ;; Start the spinner
-  (emacsgpt--start-spinner)
-  ;; Print the input
-  (emacsgpt-print-input input user-input)
   ;; Construct headers and request data
-  (let* ((combined-input (concat input "\n\n" user-input))
+  (let* ((input-tr (string-trim input))
+         (user-input-tr (string-trim user-input))
+         (combined-input (concat input-tr "\n\n" user-input-tr))
          (headers `(("Content-Type" . "application/json")
                     ("Authorization" . ,(concat "Bearer " (emacsgpt-api-key-get)))))
          (request-data (json-encode `(("model" . ,emacsgpt-api-model)
                                       ("messages" . ((("role" . "user") ("content" . ,combined-input))))))))
-    (emacsgpt-log (format "Request url: %s, headers: %s, data: %s" emacsgpt-api-chat-endpoint headers request-data))
-    (request emacsgpt-api-chat-endpoint
-      :method "POST"
-      :headers headers
-      :data request-data
-      :parser 'json-read
-      :success (cl-function
-                (lambda (&key data &allow-other-keys)
+    (if (or (string-empty-p input) (string-empty-p user-input))
+        (message "Input is empty")
+      (emacsgpt-log (format "Request url: %s, headers: %s, data: %s" emacsgpt-api-chat-endpoint headers request-data))
+      ;; Print the input
+      (emacsgpt-print-input input-tr user-input-tr)
+      ;; Start the spinner
+      (emacsgpt--start-spinner)
+      (request emacsgpt-api-chat-endpoint
+        :method "POST"
+        :headers headers
+        :data request-data
+        :parser 'json-read
+        :success (cl-function
+                  (lambda (&key data &allow-other-keys)
+                    (emacsgpt--stop-spinner)
+                    (emacsgpt-handle-response data)))
+        :error (cl-function
+                (lambda (&rest args &key error-thrown &allow-other-keys)
                   (emacsgpt--stop-spinner)
-                  (emacsgpt-handle-response data)))
-      :error (cl-function
-              (lambda (&rest args &key error-thrown &allow-other-keys)
-                (emacsgpt--stop-spinner)
-                (emacsgpt-log error-thrown)
-                (message "Got error: %S" error-thrown))))))
-
+                  (emacsgpt-log error-thrown)
+                  (message "Got error: %S" error-thrown)))))))
 
 (defun extract-content-from-response (response)
   "Extract the 'content' value from the given RESPONSE structure."
@@ -134,12 +140,9 @@
 (defun emacsgpt-eval-region (start end)
   "Evaluate the region from START to END using the OpenAI API."
   (interactive "r")
-  (let* ((region-input (string-trim (buffer-substring-no-properties start end)))
-         (user-input (read-string "Message: "))
-    (combined-input (concat region-input "\n\n" user-input)))
-    (if (string= "" (string-trim combined-input))
-        (message "Input is empty.")
-      (emacsgpt-query region-input user-input))))
+  (let* ((input (buffer-substring-no-properties start end))
+         (user-input (read-string "Message: ")))
+    (emacsgpt-query input user-input)))
 
 (defun emacsgpt-eval-paragraph ()
   "Evaluate the current paragraph using the OpenAI API."
@@ -159,9 +162,7 @@
   "Send a message to OpenAI API."
   (interactive)
   (let* ((user-input (read-string "Message: ")))
-    (if (string= "" (string-trim user-input))
-        (message "Input is empty.")
-      (emacsgpt-query "" user-input))))
+      (emacsgpt-query "" user-input)))
 
   ;;;;;;;;;;
  ;; MODE ;;
@@ -184,12 +185,12 @@
                                             '((".*INPUT.*" . font-lock-function-name-face)
                                               (".*OUTPUT.*" . font-lock-variable-name-face)))))
   ;; Make the buffer read-only
-  (setq-local buffer-read-only t))
+  (setq-local buffer-read-only t)
+  ;; Set local key binding for 'q' to quit-window
+  (local-set-key (kbd "q") 'quit-window))
 
 ;; Set the lighter for the mode line
 (add-to-list 'minor-mode-alist '(inferior-emacsgpt-mode emacsgpt--lighter))
-
-
 
 (defun emacsgpt--turn-on ()
   "Turn on `emacsgpt-mode` in the current buffer if appropriate."
