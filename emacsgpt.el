@@ -1,3 +1,39 @@
+;;; emacsgpt.el --- Interact with OpenAI API from Emacs
+
+;; Copyright (C) 2023 Eyal Erez
+
+;; Author: Eyal Erez <eyal@agilewanderer.com>
+;; Maintainer: Eyal Erez <eyal@agilewanderer.com>
+;; Created: 13 Nov 2023
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+;; This file is not part of GNU Emacs.
+
+;;; Commentary:
+
+;; This Emacs mode allows interacting with ChatGPT directly from any buffer.
+
+;; Configuration:
+;; 1. Set your OpenAI API key as an environment variable in either .bashrc or .zshrc:
+;;    Ex: 'export OPENAI_API_KEY=<API_KEY>'
+;; 2. Add the following to your `~/.emacs.d/init.el`:
+;;    ;; Ensure request.el is installed. This can be done via (use-package request) or manually.
+;;    (load "<PATH>/emacsgpt.el")        ; Load this package
+;;    (setq emacsgpt-api-model "gpt-4")  ; Set the API model to be used (default is "gpt-3.5-turbo")
+;;    (global-emacsgpt-mode t)           ; Enable the minor mode globally
+
 
 (require 'request)
 (require 'subr-x)
@@ -20,6 +56,13 @@
 (defvar emacsgpt-print-line-num 5
   "Number of lines to print in the *emacsgpt* buffer.")
 
+(defvar emacsgpt-buffer "*emacsgpt*"
+  "Name of the *emacsgpt* buffer.")
+
+(defvar emacsgpt-buffer-log "*emacsgpt log*"
+  "Name of the *emacsgpt log* buffer.")
+
+
   ;;;;;;;;;;;;;;;
  ;; UTILITIES ;;
 ;;;;;;;;;;;;;;;
@@ -29,12 +72,23 @@
   (or emacsgpt-api-key
       (getenv "OPENAI_API_KEY")))
 
+(defun emacsgpt-get-create-switch-buffer (&optional sw)
+  "Get the *emacsgpt* buffer, creating it if it doesn't exist, and switch to it."
+  (interactive)
+  (unless sw (setq sw t))
+  (let* ((buffer (get-buffer-create emacsgpt-buffer)))
+    (when sw
+      (switch-to-buffer-other-window buffer))
+    buffer))
+
 (defun emacsgpt-log (content)
   "Log CONTENT to the *emacsgpt log* buffer."
-  (with-current-buffer (get-buffer-create "*emacsgpt log*")
+  (with-current-buffer (get-buffer-create emacsgpt-buffer-log)
     (goto-char (point-max))  ; Move to the end of the buffer
     (insert content)         ; Insert the content
     (insert "\n")))          ; Add a newline for readability
+
+
 
   ;;;;;;;;;;
  ;; CHAT ;;
@@ -42,7 +96,7 @@
 
 (defun emacsgpt-print-input (context input)
   "Print the CONTEXT and INPUT to emacsgpt buffer."
-  (with-current-buffer (switch-to-buffer-other-window (get-buffer-create "*emacsgpt*"))
+  (with-current-buffer (emacsgpt-get-create-switch-buffer)
     (let ((inhibit-read-only t))
       (goto-char (point-max))
       (when (not (string-empty-p context))  ; check if context is not empty
@@ -70,7 +124,7 @@
                                       ("messages" . ((("role" . "user") ("content" . ,combined-input))))))))
     (if (and (string-empty-p context) (string-empty-p input))
         (message "Input is empty")
-      (emacsgpt-log (format "Request url: %s, headers: %s, data: %s" emacsgpt-api-chat-endpoint headers request-data))
+      (emacsgpt-log (format "Request: url: %s, headers: %s, data: %s" emacsgpt-api-chat-endpoint headers request-data))
       ;; Print the context
       (emacsgpt-print-input context-tr input-tr)
       (request emacsgpt-api-chat-endpoint
@@ -80,11 +134,12 @@
         :parser 'json-read
         :success (cl-function
                   (lambda (&key data &allow-other-keys)
+                    (emacsgpt-log (format "Response: %S" data))
                     (emacsgpt-handle-response data)))
         :error (cl-function
                 (lambda (&rest args &key error-thrown &allow-other-keys)
-                  (emacsgpt-log error-thrown)
-                  (message "Got error: %S" error-thrown)))))))
+                  (emacsgpt-log (format ("Error: %S" error-thrown)))
+                  (message "Error: %S" error-thrown)))))))
 
 (defun extract-content-from-response (response)
   "Extract the 'content' value from the given RESPONSE structure."
@@ -97,7 +152,7 @@
 (defun emacsgpt-handle-response (data)
   "Handle the response from the Emacsgpt API, given DATA and INPUT."
   (let* ((output (extract-content-from-response data)))
-    (with-current-buffer (get-buffer-create "*emacsgpt*")
+    (with-current-buffer (emacsgpt-get-create-switch-buffer nil)
       (let ((inhibit-read-only t))
         (goto-char (point-max))
         (insert (format "\n\n------------------------------------- OUTPUT -----------------------------------\n\n%s\n" output))
@@ -134,9 +189,10 @@ Optional argument LEVELS indicates the number of parent org levels to include."
       (save-excursion
         (while (and (> levels 0) (org-up-heading-safe)) ; Go up by 'levels' number of headings
           (setq levels (1- levels)))
-        (let ((start (point)))
-          (outline-end-of-subtree)
-          (emacsgpt-eval-region start (point))))
+        (let* ((element (org-element-at-point)) ; Get the org element at the current point
+               (start (org-element-property :begin element)) ; The start point is the beginning of the element
+               (end (org-element-property :end element))) ; The end point is the end of the element
+          (emacsgpt-eval-region start end)))
     (message "Not in org-mode")))
 
 (defun emacsgpt-eval-org-0 ()
@@ -168,6 +224,7 @@ Optional argument LEVELS indicates the number of parent org levels to include."
 (define-minor-mode emacsgpt-mode
   "A minor mode to interact with OpenAI's Emacsgpt."
   :keymap (let ((map (make-sparse-keymap)))
+            (define-key map (kbd "C-c c s") 'emacsgpt-get-create-switch-buffer)
             (define-key map (kbd "C-c c r") 'emacsgpt-eval-region)
             (define-key map (kbd "C-c c b") 'emacsgpt-eval-buffer)
             (define-key map (kbd "C-c c p") 'emacsgpt-eval-paragraph)
