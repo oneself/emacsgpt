@@ -19,6 +19,11 @@ export OPENAI_API_KEY=<API_KEY>
 (global-emacsgpt-mode t)           ; Turn minor mode on globally
 ```
 3. Once in any buffer use one of the following functions to interact with ChatGPT:
+   - `emacsgpt-get-create-switch-buffer` (`C-c c s`): Show *emacsgpt* buffer.
    - `emacsgpt-eval-region` (`C-c c r`) : Send active region.
-   - `emacsgpt-eval-paragraph` (`C-c c r`) : Send current paragraph.
-   - `emacsgpt-eval-message` (`C-c c r`) : Send a custom message.
+   - `emacsgpt-eval-paragraph` (`C-c c p`) : Send current paragraph.
+   - `emacsgpt-eval-message` (`C-c c b`) : Send buffer.
+   - `emacsgpt-eval-message` (`C-c c m`): Send a custom message.
+   - `emacsgpt-eval-org-0` (`C-c c 0`): Send enclosing `org-mode` heading.
+   - `emacsgpt-eval-org-1` (`C-c c 1`): Send enclosing `org-mode` heading one level up.
+   - `emacsgpt-eval-org-2` (`C-c c 2`): Send enclosing `org-mode` heading two levels up.

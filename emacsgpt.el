@@ -34,11 +34,8 @@
 ;;    (setq emacsgpt-api-model "gpt-4")  ; Set the API model to be used (default is "gpt-3.5-turbo")
 ;;    (global-emacsgpt-mode t)           ; Enable the minor mode globally
 
-
 (require 'request)
 (require 'subr-x)
-
-;(setq debug-on-error t)
 
   ;;;;;;;;;;;;;;;
  ;; VARIABLES ;;
@@ -61,7 +58,6 @@
 
 (defvar emacsgpt-buffer-log "*emacsgpt log*"
   "Name of the *emacsgpt log* buffer.")
-
 
   ;;;;;;;;;;;;;;;
  ;; UTILITIES ;;
