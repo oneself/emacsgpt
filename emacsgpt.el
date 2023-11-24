@@ -68,14 +68,11 @@
   (or emacsgpt-api-key
       (getenv "OPENAI_API_KEY")))
 
-(defun emacsgpt-get-create-switch-buffer (&optional sw)
+(defun emacsgpt-get-create-switch-buffer ()
   "Get the *emacsgpt* buffer, creating it if it doesn't exist, and switch to it."
   (interactive)
-  (unless sw (setq sw t))
   (let* ((buffer (get-buffer-create emacsgpt-buffer)))
-    (when sw
-      (switch-to-buffer-other-window buffer))
-    buffer))
+    (switch-to-buffer-other-window buffer)))
 
 (defun emacsgpt-log (content)
   "Log CONTENT to the *emacsgpt log* buffer."
@@ -148,7 +145,7 @@
 (defun emacsgpt-handle-response (data)
   "Handle the response from the Emacsgpt API, given DATA and INPUT."
   (let* ((output (extract-content-from-response data)))
-    (with-current-buffer (emacsgpt-get-create-switch-buffer nil)
+    (with-current-buffer (get-buffer-create emacsgpt-buffer)
       (let ((inhibit-read-only t))
         (goto-char (point-max))
         (insert (format "\n\n------------------------------------- OUTPUT -----------------------------------\n\n%s\n" output))
@@ -177,12 +174,14 @@
   ;; Use `point-min` and `point-max` to get the start and end of the buffer
   (emacsgpt-eval-region (point-min) (point-max)))
 
+
 (defun emacsgpt-eval-org (&optional levels)
   "Evaluate the current Org mode heading and its content using the OpenAI API.
 Optional argument LEVELS indicates the number of parent org levels to include."
   (interactive "p")
   (if (eq major-mode 'org-mode)
       (save-excursion
+        (org-back-to-heading)
         (while (and (> levels 0) (org-up-heading-safe)) ; Go up by 'levels' number of headings
           (setq levels (1- levels)))
         (let* ((element (org-element-at-point)) ; Get the org element at the current point
@@ -197,15 +196,14 @@ Optional argument LEVELS indicates the number of parent org levels to include."
   (emacsgpt-eval-org 0))
 
 (defun emacsgpt-eval-org-1 ()
-  "Evaluate the current Org mode heading and its content including one level of parent org levels using the OpenAI API."
+  "Evaluate the current Org mode heading and its content including 1 level of parent org levels using the OpenAI API."
   (interactive)
   (emacsgpt-eval-org 1))
 
 (defun emacsgpt-eval-org-2 ()
-  "Evaluate the current Org mode heading and its content including two levels of parent org levels using the OpenAI API."
+  "Evaluate the current Org mode heading and its content including 2 levels of parent org levels using the OpenAI API."
   (interactive)
   (emacsgpt-eval-org 2))
-
 
 (defun emacsgpt-eval-message ()
   "Send a message to OpenAI API."
