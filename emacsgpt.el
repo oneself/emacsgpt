@@ -29,10 +29,12 @@
 ;; 1. Set your OpenAI API key as an environment variable in either .bashrc or .zshrc:
 ;;    Ex: 'export OPENAI_API_KEY=<API_KEY>'
 ;; 2. Add the following to your `~/.emacs.d/init.el`:
-;;    ;; Ensure request.el is installed. This can be done via (use-package request) or manually.
+;;    ;; Ensure request.el is installed.  This can be done via (use-package request) or manually.
 ;;    (load "<PATH>/emacsgpt.el")        ; Load this package
 ;;    (setq emacsgpt-api-model "gpt-4")  ; Set the API model to be used (default is "gpt-3.5-turbo")
 ;;    (global-emacsgpt-mode t)           ; Enable the minor mode globally
+
+;;; Code:
 
 (require 'request)
 (require 'subr-x)
@@ -41,8 +43,9 @@
  ;; VARIABLES ;;
 ;;;;;;;;;;;;;;;
 
+
 (defvar emacsgpt-api-key nil
-  "API key for OpenAI. Set this variable or the environment variable OPENAI_API_KEY.")
+  "API key for OpenAI.  Set this variable or the environment variable OPENAI_API_KEY.")
 
 (defvar emacsgpt-api-model "gpt-4"
   "Model name for OpenAI API.")
@@ -251,3 +254,7 @@ Optional argument LEVELS indicates the number of parent org levels to include."
   emacsgpt-mode emacsgpt--turn-on)
 
 (provide 'emacsgpt-mode)
+
+(provide 'emacsgpt)
+
+;;; emacsgpt.el ends here
