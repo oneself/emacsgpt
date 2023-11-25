@@ -1,10 +1,15 @@
-;;; emacsgpt.el --- Interact with OpenAI API from Emacs
+;;; emacsgpt.el --- Interact with OpenAI API
+;; -*- Mode: Emacs-Lisp -*-
 
 ;; Copyright (C) 2023 Eyal Erez
 
 ;; Author: Eyal Erez <eyal@agilewanderer.com>
 ;; Maintainer: Eyal Erez <eyal@agilewanderer.com>
 ;; Created: 13 Nov 2023
+;; URL: https://github.com/oneself/emacsgpt
+;; Version: 0.1
+
+;; Package-Requires: ((emacs "24.4"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -106,7 +111,7 @@
             (insert (format "\n[%d more lines]\n" remaining-lines)))))
       (insert (format "\n------------------------------------- INPUT ------------------------------------\n\n%s\n"
                       input)))
-    (inferior-emacsgpt-mode)))
+    (emacsgpt-inferior-mode)))
 
 
 (defun emacsgpt-query (context input)
@@ -138,7 +143,7 @@
                   (emacsgpt-log (format ("Error: %S" error-thrown)))
                   (message "Error: %S" error-thrown)))))))
 
-(defun extract-content-from-response (response)
+(defun emacsgpt-extract-content-from-response (response)
   "Extract the 'content' value from the given RESPONSE structure."
   (let* ((choices (cdr (assoc 'choices response)))  ; Extract the 'choices' list
          (first-choice (aref choices 0))            ; Get the first element of the vector
@@ -148,13 +153,13 @@
 
 (defun emacsgpt-handle-response (data)
   "Handle the response from the Emacsgpt API, given DATA and INPUT."
-  (let* ((output (extract-content-from-response data)))
+  (let* ((output (emacsgpt-extract-content-from-response data)))
     (with-current-buffer (get-buffer-create emacsgpt-buffer)
       (let ((inhibit-read-only t))
         (goto-char (point-max))
         (insert (format "\n\n------------------------------------- OUTPUT -----------------------------------\n\n%s\n" output))
         (goto-char (point-max))
-        (inferior-emacsgpt-mode)))))
+        (emacsgpt-inferior-mode)))))
 
 
 (defun emacsgpt-eval-region (start end)
@@ -266,7 +271,7 @@ Optional argument LEVELS indicates the number of parent org levels to include."
 ;;            (define-key map (kbd "C-c c 2") 'emacsgpt-eval-org-2)
 ;;            map))
 
-(define-derived-mode inferior-emacsgpt-mode markdown-mode "Inferior Emacsgpt"
+(define-derived-mode emacsgpt-inferior-mode markdown-mode "Inferior Emacsgpt"
   "Major mode for Emacsgpt interaction."
   ;; Combine markdown-mode's font-lock keywords with custom ones
   (setq-local font-lock-defaults `(,(append markdown-mode-font-lock-keywords
