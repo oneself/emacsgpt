@@ -32,6 +32,7 @@
 ;;    ;; Ensure request.el is installed.  This can be done via (use-package request) or manually.
 ;;    (load "<PATH>/emacsgpt.el")        ; Load this package
 ;;    (setq emacsgpt-api-model "gpt-4")  ; Set the API model to be used (default is "gpt-3.5-turbo")
+;;    (setq emacsgpt-prefix-key "C-c c") ; Set the prefix key for emacsgpt-mode commands (default is "C-c -")
 ;;    (global-emacsgpt-mode t)           ; Enable the minor mode globally
 
 ;;; Code:
@@ -218,18 +219,52 @@ Optional argument LEVELS indicates the number of parent org levels to include."
  ;; MODE ;;
 ;;;;;;;;;;
 
+
+(defcustom emacsgpt-prefix-key "C-c -"
+  "Prefix key for emacsgpt-mode commands."
+  :type 'string
+  :group 'emacsgpt
+  :set (lambda (symbol value)
+         (set-default symbol value)
+         (when (fboundp 'emacsgpt-update-keymap) ; Check if emacsgpt-update-keymap is defined
+           (emacsgpt-update-keymap))))
+
+(defvar emacsgpt-mode-map (make-sparse-keymap)
+  "Keymap for emacsgpt-mode.")
+
+(defun emacsgpt-update-keymap ()
+  "Update the keymap for emacsgpt-mode."
+  (setf (cdr emacsgpt-mode-map) nil) ; Clear existing keymap
+  (define-key emacsgpt-mode-map (kbd (concat emacsgpt-prefix-key " s")) 'emacsgpt-get-create-switch-buffer)
+  (define-key emacsgpt-mode-map (kbd (concat emacsgpt-prefix-key " r")) 'emacsgpt-eval-region)
+  (define-key emacsgpt-mode-map (kbd (concat emacsgpt-prefix-key " b")) 'emacsgpt-eval-buffer)
+  (define-key emacsgpt-mode-map (kbd (concat emacsgpt-prefix-key " p")) 'emacsgpt-eval-paragraph)
+  (define-key emacsgpt-mode-map (kbd (concat emacsgpt-prefix-key " m")) 'emacsgpt-eval-message)
+  (define-key emacsgpt-mode-map (kbd (concat emacsgpt-prefix-key " 0")) 'emacsgpt-eval-org-0)
+  (define-key emacsgpt-mode-map (kbd (concat emacsgpt-prefix-key " 1")) 'emacsgpt-eval-org-1)
+  (define-key emacsgpt-mode-map (kbd (concat emacsgpt-prefix-key " 2")) 'emacsgpt-eval-org-2))
+
 (define-minor-mode emacsgpt-mode
   "A minor mode to interact with OpenAI's Emacsgpt."
-  :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-c c s") 'emacsgpt-get-create-switch-buffer)
-            (define-key map (kbd "C-c c r") 'emacsgpt-eval-region)
-            (define-key map (kbd "C-c c b") 'emacsgpt-eval-buffer)
-            (define-key map (kbd "C-c c p") 'emacsgpt-eval-paragraph)
-            (define-key map (kbd "C-c c m") 'emacsgpt-eval-message)
-            (define-key map (kbd "C-c c 0") 'emacsgpt-eval-org-0)
-            (define-key map (kbd "C-c c 1") 'emacsgpt-eval-org-1)
-            (define-key map (kbd "C-c c 2") 'emacsgpt-eval-org-2)
-            map))
+  :keymap emacsgpt-mode-map
+  (when emacsgpt-mode
+    (emacsgpt-update-keymap)))
+
+;; Initialize the keymap
+(emacsgpt-update-keymap)
+
+;;(define-minor-mode emacsgpt-mode
+;;  "A minor mode to interact with OpenAI's Emacsgpt."
+;;  :keymap (let ((map (make-sparse-keymap)))
+;;            (define-key map (kbd "C-c c s") 'emacsgpt-get-create-switch-buffer)
+;;            (define-key map (kbd "C-c c r") 'emacsgpt-eval-region)
+;;            (define-key map (kbd "C-c c b") 'emacsgpt-eval-buffer)
+;;            (define-key map (kbd "C-c c p") 'emacsgpt-eval-paragraph)
+;;            (define-key map (kbd "C-c c m") 'emacsgpt-eval-message)
+;;            (define-key map (kbd "C-c c 0") 'emacsgpt-eval-org-0)
+;;            (define-key map (kbd "C-c c 1") 'emacsgpt-eval-org-1)
+;;            (define-key map (kbd "C-c c 2") 'emacsgpt-eval-org-2)
+;;            map))
 
 (define-derived-mode inferior-emacsgpt-mode markdown-mode "Inferior Emacsgpt"
   "Major mode for Emacsgpt interaction."

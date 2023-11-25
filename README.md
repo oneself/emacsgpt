@@ -16,6 +16,7 @@ export OPENAI_API_KEY=<API_KEY>
 ;; Ensure request.el is installed, this can be done via (use-package request) or manually.
 (load "<PATH>/emacsgpt.el")        ; Load package
 (setq emacsgpt-api-model "gpt-4")  ; Set API model to use (default is "gpt-3.5-turbo")
+(setq emacsgpt-prefix-key "C-c c") ; Set the prefix key for emacsgpt-mode commands (default is "C-c -")
 (global-emacsgpt-mode t)           ; Turn minor mode on globally
 ```
 3. Once in any buffer use one of the following functions to interact with ChatGPT:
